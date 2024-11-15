@@ -9,6 +9,10 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // Import the database connection pool
 const pool = require('../pool'); // Adjust path based on your project structure
 
+// Hardcoded super admin credentials
+const SUPER_ADMIN_EMAIL = 'super_admin@mail.com';
+const SUPER_ADMIN_PASSWORD = '123qwe';
+
 router.post('/', async (req, res) => {
     const { email, password } = req.body;
 
@@ -18,6 +22,20 @@ router.post('/', async (req, res) => {
     }
 
     try {
+        // Check for hardcoded super admin credentials
+        if (email === SUPER_ADMIN_EMAIL && password === SUPER_ADMIN_PASSWORD) {
+            const token = jwt.sign(
+                { email, role: 'super_admin' },
+                JWT_SECRET,
+                { expiresIn: '1h' } // Token valid for 1 hour
+            );
+            return res.status(200).json({
+                message: 'Login successful',
+                role: 'super_admin',
+                token: token,
+            });
+        }
+
         // Find the user by email
         const query = `SELECT * FROM users WHERE email = $1;`;
         const values = [email];
@@ -37,13 +55,14 @@ router.post('/', async (req, res) => {
 
         // Generate a JWT token
         const token = jwt.sign(
-            { id: user.id, email: user.email, name: user.name },
+            { id: user.id, email: user.email, role: user.role },
             JWT_SECRET,
             { expiresIn: '1h' } // Token valid for 1 hour
         );
 
         res.status(200).json({
             message: 'Login successful',
+            role: user.role,
             token: token,
         });
     } catch (err) {
