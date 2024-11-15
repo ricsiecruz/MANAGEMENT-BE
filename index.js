@@ -12,9 +12,11 @@ const pool = new Pool({
 });
 
 const signupRoutes = require('./routes/signup');
+const loginRoutes = require('./routes/login');
   
 app.use(express.json());
 app.use('/signup', signupRoutes);
+app.use('/login', loginRoutes);
 
 async function createUsersTable() {
     try {
