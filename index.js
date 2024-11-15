@@ -1,4 +1,5 @@
 const express = require('express')
+const cors = require('cors');
 const { Pool } = require('pg');
 const app = express()
 const port = 8080
@@ -13,10 +14,13 @@ const pool = new Pool({
 
 const signupRoutes = require('./routes/signup');
 const loginRoutes = require('./routes/login');
+const usersRoutes = require('./routes/users');
   
 app.use(express.json());
+app.use(cors());
 app.use('/signup', signupRoutes);
 app.use('/login', loginRoutes);
+app.use('/users', usersRoutes);
 
 async function createUsersTable() {
     try {
