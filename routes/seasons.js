@@ -45,21 +45,27 @@ async function importDataFromJson() {
                     console.warn("Week data is not an array:", weekData);
                     weekData = [weekData]; // Convert to array if it's not
                 }
-
-                return weekData.map(week => ({
-                    f: week.f || "0",  // Default to "0" if 'f' is missing
-                    points: week.points || "0.00",  // Default to "0.00" if 'points' is missing
-                    week: week.week || ""  // Default to empty string if 'week' is missing
-                }));
+            
+                return weekData.map(week => {
+                    const f = parseFloat(week.f || "0");  // Default to 0 if 'f' is missing
+                    const points = parseFloat(week.points || "0.00");  // Default to 0.00 if 'points' is missing
+                    const weekValue = f * points;  // Apply the formula f * points = week
+            
+                    return {
+                        f: f.toString(),  // Store 'f' as string
+                        points: points.toFixed(2),  // Store 'points' as string with 2 decimals
+                        week: weekValue.toFixed(2)  // Store the calculated week value as string with 2 decimals
+                    };
+                });
             };
-
+            
             // Process week data for all weeks
             const week1 = addWeekData(record.sdfa_points[0].week1);
             const week2 = addWeekData(record.sdfa_points[0].week2);
             const week3 = addWeekData(record.sdfa_points[0].week3);
             const week4 = addWeekData(record.sdfa_points[0].week4);
             const week5 = addWeekData(record.sdfa_points[0].week5);
-
+            
             // Construct sdfa_points dynamically
             const sdfa_points = [
                 {
@@ -70,8 +76,16 @@ async function importDataFromJson() {
                     week5: week5
                 }
             ];
+            
+            const totalWeeks = [
+                ...week1, ...week2, ...week3, ...week4, ...week5
+            ].reduce((acc, week) => acc + parseFloat(week.week), 0);
+            
+            const numberOfWeeks = Object.keys(sdfa_points[0]).length;
+            const upr = (totalWeeks / numberOfWeeks).toFixed(2);
 
-            // Prepare the SQL query
+            console.log('Calculated upr:', upr);
+
             const query = `
                 INSERT INTO derbySdfa (
                     id, line, family, sire, dam, week1, week2, week3, week4, week5, upr, sd, sdfa_coefficient, remarks, sdfa_points
@@ -106,7 +120,7 @@ async function importDataFromJson() {
                 JSON.stringify(week3),
                 JSON.stringify(week4),
                 JSON.stringify(week5),
-                record.upr,
+                upr,  // Insert the calculated upr value
                 record.sd,
                 record.sdfa_coefficient,
                 record.remarks,
