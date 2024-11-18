@@ -7,7 +7,7 @@ async function createFamilyTable() {
         const query = `
         CREATE TABLE IF NOT EXISTS family (
             id SERIAL PRIMARY KEY,
-            family VARCHAR(255) NOT NULL,
+            family VARCHAR(255),
             date_added TIMESTAMP DEFAULT NOW()
         );
         `;
