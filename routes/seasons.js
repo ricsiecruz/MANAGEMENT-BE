@@ -71,12 +71,12 @@ async function importDataFromJson() {
                     console.warn("Week data is not an array:", weekData);
                     weekData = [weekData];
                 }
-            
+
                 return weekData.map(week => {
                     const f = parseFloat(week.f || "0");
                     const points = parseFloat(week.points || "0.00");
                     const weekValue = f * points;
-            
+
                     return {
                         f: f.toString(),
                         points: points.toFixed(2),
@@ -84,13 +84,13 @@ async function importDataFromJson() {
                     };
                 });
             };
-            
+
             const week1 = addWeekData(record.sdfa_points[0].week1);
             const week2 = addWeekData(record.sdfa_points[0].week2);
             const week3 = addWeekData(record.sdfa_points[0].week3);
             const week4 = addWeekData(record.sdfa_points[0].week4);
             const week5 = addWeekData(record.sdfa_points[0].week5);
-            
+
             const sdfa_points = [
                 {
                     week1: week1,
@@ -100,11 +100,11 @@ async function importDataFromJson() {
                     week5: week5
                 }
             ];
-            
+
             const totalWeeks = [
                 ...week1, ...week2, ...week3, ...week4, ...week5
             ].reduce((acc, week) => acc + parseFloat(week.week), 0);
-            
+
             const numberOfWeeks = Object.keys(sdfa_points[0]).length;
             const upr = (totalWeeks / numberOfWeeks).toFixed(2);
 
@@ -115,6 +115,7 @@ async function importDataFromJson() {
             };
         });
 
+        // Calculate avgPoints AFTER transforming data
         const avgPoints = calculateAvgPoints(transformedData);
 
         const finalData = {
@@ -124,7 +125,10 @@ async function importDataFromJson() {
 
         console.log(JSON.stringify(finalData, null, 2));
 
+        // Now that avgPoints is available, proceed with inserting data into the database
         for (const record of transformedData) {
+            const sd = (parseFloat(record.upr) - parseFloat(avgPoints)).toFixed(2);  // Calculate sd here
+
             const query = `
                 INSERT INTO derbySdfa (
                     id, line, family, sire, dam, week1, week2, week3, week4, week5, upr, sd, sdfa_coefficient, remarks, sdfa_points
@@ -159,7 +163,7 @@ async function importDataFromJson() {
                 JSON.stringify(record.sdfa_points[0].week4),
                 JSON.stringify(record.sdfa_points[0].week5),
                 record.upr,
-                record.sd,
+                sd,  // Include sd here
                 record.sdfa_coefficient,
                 record.remarks,
                 JSON.stringify(record.sdfa_points)
@@ -196,6 +200,9 @@ router.get('/', async (req, res) => {
                 week5: sdfaPoints.week5
             };
 
+            // Calculate sd using upr - avgPoints
+            const sd = (parseFloat(record.upr) - parseFloat(avgPoints)).toFixed(2);
+
             return {
                 id: record.id,
                 line: record.line,
@@ -207,11 +214,11 @@ router.get('/', async (req, res) => {
                 week3: record.week3,
                 week4: record.week4,
                 week5: record.week5,
-                sd: record.sd,
                 sdfa_coefficient: record.sdfa_coefficient,
                 remarks: record.remarks,
                 sdfa_points: {
                     upr: record.upr,
+                    sd: sd,  // Add sd field to the response
                     data: [weeksData]
                 },
                 weekno: record.weekno
