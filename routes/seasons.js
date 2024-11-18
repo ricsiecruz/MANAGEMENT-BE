@@ -174,7 +174,7 @@ async function importDataFromJson() {
     }
 }
 
-router.get('/', async(req, res) => {
+router.get('/', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM derbySdfa');
 
@@ -184,16 +184,47 @@ router.get('/', async(req, res) => {
 
         const avgPoints = calculateAvgPoints(result.rows);
         const avgFactorF = calculateAvgFactorF(result.rows);
-        console.log('AvgFactorF:', avgFactorF);
+
+        const transformedData = result.rows.map(record => {
+            // Extract weeks from sdfa_points
+            const sdfaPoints = record.sdfa_points[0];
+            const weeksData = {
+                week1: sdfaPoints.week1,
+                week2: sdfaPoints.week2,
+                week3: sdfaPoints.week3,
+                week4: sdfaPoints.week4,
+                week5: sdfaPoints.week5
+            };
+
+            return {
+                id: record.id,
+                line: record.line,
+                family: record.family,
+                sire: record.sire,
+                dam: record.dam,
+                week1: record.week1,
+                week2: record.week2,
+                week3: record.week3,
+                week4: record.week4,
+                week5: record.week5,
+                sd: record.sd,
+                sdfa_coefficient: record.sdfa_coefficient,
+                remarks: record.remarks,
+                sdfa_points: {
+                    upr: record.upr,
+                    data: [weeksData]
+                },
+                weekno: record.weekno
+            };
+        });
 
         const responseData = {
             avgPoints: avgPoints,
             avgFactorF: avgFactorF,
-            data: result.rows
+            data: transformedData
         };
 
         res.status(200).json(responseData);
-
     } catch (err) {
         console.error('Error fetching derbySdfa:', err);
         res.status(500).json({ message: 'Failed to fetch derbySdfa' });
