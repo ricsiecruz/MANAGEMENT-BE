@@ -39,26 +39,46 @@ async function importDataFromJson() {
     try {
         for (const record of data.data) {
             // Modify week data to include weekNo (week calculation) directly in the week objects
-            const addWeekNoToData = (weekData) => {
+            const addWeekData = (weekData) => {
+                // Ensure weekData is an array
+                if (!Array.isArray(weekData)) {
+                    console.warn("Week data is not an array:", weekData);
+                    weekData = [weekData]; // Convert to array if it's not
+                }
+            
                 return weekData.map(week => {
-                    if (week.rank && week.totalBirds) {
-                        const rank = parseFloat(week.rank);
-                        const totalBirds = parseFloat(week.totalBirds);
-                        // Round to two decimal places
-                        week.week = (rank / totalBirds).toFixed(2);  // Week number formula rounded to two decimals
-                    } else {
-                        week.week = null;  // If no rank or totalBirds, set week to null
-                    }
-                    return week;
+                    const weekObject = {};
+            
+                    // Check if the week contains the necessary fields and if not, populate default values
+                    weekObject["f"] = week.f || "0";  // Default to "0" if 'f' is missing
+                    weekObject["points"] = week.points || "0.00";  // Default to "0.00" if 'points' is missing
+                    weekObject["week"] = week.week || "";  // Default to empty string if 'week' is missing
+            
+                    return weekObject;
                 });
             };
+            
 
-            // Add weekNo directly to each week (week1, week2, etc.)
-            const week1 = addWeekNoToData(record.week1);
-            const week2 = addWeekNoToData(record.week2);
-            const week3 = addWeekNoToData(record.week3);
-            const week4 = addWeekNoToData(record.week4);
-            const week5 = addWeekNoToData(record.week5);
+            // Apply the data transformation
+            const week1 = addWeekData(record.sdfaPoints[0].week1);
+            const week2 = addWeekData(record.sdfaPoints[0].week2);
+            const week3 = addWeekData(record.sdfaPoints[0].week3);
+            const week4 = addWeekData(record.sdfaPoints[0].week4);
+            const week5 = addWeekData(record.sdfaPoints[0].week5);
+            
+            // Log for debugging
+            console.log("Week 1 Data:", week1);            
+
+            // Modify the sdfaPoints field if it's empty, or to match your expected structure
+            const sdfaPoints = [
+                { 
+                    "week1": { "points": "1.00", "f": "1" },
+                    "week2": { "points": "1.00", "f": "1" },
+                    "week3": { "points": "1.00", "f": "1" },
+                    "week4": { "points": "1.00", "f": "1" },
+                    "week5": { "points": "1.00", "f": "1" }
+                }
+            ];
 
             const query = `
                 INSERT INTO derbySdfa (
@@ -98,7 +118,7 @@ async function importDataFromJson() {
                 record.sd, 
                 record.sdfa_coefficient, 
                 record.remarks, 
-                JSON.stringify(record.sdfaPoints)
+                JSON.stringify(sdfaPoints)  // Insert the formatted sdfaPoints
             ];
 
             await pool.query(query, values);
