@@ -38,48 +38,40 @@ async function importDataFromJson() {
 
     try {
         for (const record of data.data) {
-            // Modify week data to include weekNo (week calculation) directly in the week objects
+            // Function to normalize and transform week data
             const addWeekData = (weekData) => {
                 // Ensure weekData is an array
                 if (!Array.isArray(weekData)) {
                     console.warn("Week data is not an array:", weekData);
                     weekData = [weekData]; // Convert to array if it's not
                 }
-            
-                return weekData.map(week => {
-                    const weekObject = {};
-            
-                    // Check if the week contains the necessary fields and if not, populate default values
-                    weekObject["f"] = week.f || "0";  // Default to "0" if 'f' is missing
-                    weekObject["points"] = week.points || "0.00";  // Default to "0.00" if 'points' is missing
-                    weekObject["week"] = week.week || "";  // Default to empty string if 'week' is missing
-            
-                    return weekObject;
-                });
+
+                return weekData.map(week => ({
+                    f: week.f || "0",  // Default to "0" if 'f' is missing
+                    points: week.points || "0.00",  // Default to "0.00" if 'points' is missing
+                    week: week.week || ""  // Default to empty string if 'week' is missing
+                }));
             };
-            
 
-            // Apply the data transformation
-            const week1 = addWeekData(record.sdfaPoints[0].week1);
-            const week2 = addWeekData(record.sdfaPoints[0].week2);
-            const week3 = addWeekData(record.sdfaPoints[0].week3);
-            const week4 = addWeekData(record.sdfaPoints[0].week4);
-            const week5 = addWeekData(record.sdfaPoints[0].week5);
-            
-            // Log for debugging
-            console.log("Week 1 Data:", week1);            
+            // Process week data for all weeks
+            const week1 = addWeekData(record.sdfa_points[0].week1);
+            const week2 = addWeekData(record.sdfa_points[0].week2);
+            const week3 = addWeekData(record.sdfa_points[0].week3);
+            const week4 = addWeekData(record.sdfa_points[0].week4);
+            const week5 = addWeekData(record.sdfa_points[0].week5);
 
-            // Modify the sdfaPoints field if it's empty, or to match your expected structure
-            const sdfaPoints = [
-                { 
-                    "week1": { "points": "1.00", "f": "1" },
-                    "week2": { "points": "1.00", "f": "1" },
-                    "week3": { "points": "1.00", "f": "1" },
-                    "week4": { "points": "1.00", "f": "1" },
-                    "week5": { "points": "1.00", "f": "1" }
+            // Construct sdfa_points dynamically
+            const sdfa_points = [
+                {
+                    week1: week1,
+                    week2: week2,
+                    week3: week3,
+                    week4: week4,
+                    week5: week5
                 }
             ];
 
+            // Prepare the SQL query
             const query = `
                 INSERT INTO derbySdfa (
                     id, line, family, sire, dam, week1, week2, week3, week4, week5, upr, sd, sdfa_coefficient, remarks, sdfa_points
@@ -104,21 +96,21 @@ async function importDataFromJson() {
             `;
 
             const values = [
-                record.id, 
-                record.line, 
-                record.family, 
-                record.sire, 
-                record.dam, 
-                JSON.stringify(week1), 
-                JSON.stringify(week2), 
-                JSON.stringify(week3), 
-                JSON.stringify(week4), 
-                JSON.stringify(week5), 
-                record.upr, 
-                record.sd, 
-                record.sdfa_coefficient, 
-                record.remarks, 
-                JSON.stringify(sdfaPoints)  // Insert the formatted sdfaPoints
+                record.id,
+                record.line,
+                record.family,
+                record.sire,
+                record.dam,
+                JSON.stringify(week1),
+                JSON.stringify(week2),
+                JSON.stringify(week3),
+                JSON.stringify(week4),
+                JSON.stringify(week5),
+                record.upr,
+                record.sd,
+                record.sdfa_coefficient,
+                record.remarks,
+                JSON.stringify(sdfa_points)  // Insert the dynamically constructed sdfa_points
             ];
 
             await pool.query(query, values);
