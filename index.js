@@ -40,3 +40,9 @@ initialize().then(() => {
     console.error('Error during initialization:', err);
     process.exit(1);
 });
+
+process.on('SIGINT', async () => {
+    console.log('Shutting down gracefully...');
+    await pool.end();
+    process.exit(0);
+});

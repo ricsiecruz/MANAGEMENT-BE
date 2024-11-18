@@ -44,6 +44,21 @@ async function importDataFromJson() {
                 ) VALUES (
                     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
                 )
+                ON CONFLICT (id) DO UPDATE SET
+                    line = EXCLUDED.line,
+                    family = EXCLUDED.family,
+                    sire = EXCLUDED.sire,
+                    dam = EXCLUDED.dam,
+                    week1 = EXCLUDED.week1,
+                    week2 = EXCLUDED.week2,
+                    week3 = EXCLUDED.week3,
+                    week4 = EXCLUDED.week4,
+                    week5 = EXCLUDED.week5,
+                    upr = EXCLUDED.upr,
+                    sd = EXCLUDED.sd,
+                    sdfa_coefficient = EXCLUDED.sdfa_coefficient,
+                    remarks = EXCLUDED.remarks,
+                    sdfa_points = EXCLUDED.sdfa_points;
             `;
             const values = [
                 record.id, 
@@ -68,11 +83,18 @@ async function importDataFromJson() {
         console.log('Data imported successfully');
     } catch (err) {
         console.error('Error importing data:', err);
-    } finally {
-        // Close the pool connection after the operation is completed
-        await pool.end();
     }
 }
+
+router.get('/', async(req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM derbySdfa');
+        res.status(200).json(result.rows);
+    } catch (err) {
+        console.error('Error fetching derbySdfa:', err);
+        res.status(500).json({ message: 'Failed to fetch derbySdfa' });
+    }
+})
 
 module.exports = {
     router,
