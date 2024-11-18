@@ -21,7 +21,7 @@ async function createDerbySdfaTable() {
             sd VARCHAR,
             sdfa_coefficient VARCHAR,
             remarks VARCHAR,
-            sdfa_points JSONB  
+            sdfa_points JSONB
         );
         `;
 
@@ -38,6 +38,28 @@ async function importDataFromJson() {
 
     try {
         for (const record of data.data) {
+            // Modify week data to include weekNo (week calculation) directly in the week objects
+            const addWeekNoToData = (weekData) => {
+                return weekData.map(week => {
+                    if (week.rank && week.totalBirds) {
+                        const rank = parseFloat(week.rank);
+                        const totalBirds = parseFloat(week.totalBirds);
+                        // Round to two decimal places
+                        week.week = (rank / totalBirds).toFixed(2);  // Week number formula rounded to two decimals
+                    } else {
+                        week.week = null;  // If no rank or totalBirds, set week to null
+                    }
+                    return week;
+                });
+            };
+
+            // Add weekNo directly to each week (week1, week2, etc.)
+            const week1 = addWeekNoToData(record.week1);
+            const week2 = addWeekNoToData(record.week2);
+            const week3 = addWeekNoToData(record.week3);
+            const week4 = addWeekNoToData(record.week4);
+            const week5 = addWeekNoToData(record.week5);
+
             const query = `
                 INSERT INTO derbySdfa (
                     id, line, family, sire, dam, week1, week2, week3, week4, week5, upr, sd, sdfa_coefficient, remarks, sdfa_points
@@ -60,17 +82,18 @@ async function importDataFromJson() {
                     remarks = EXCLUDED.remarks,
                     sdfa_points = EXCLUDED.sdfa_points;
             `;
+
             const values = [
                 record.id, 
                 record.line, 
                 record.family, 
                 record.sire, 
                 record.dam, 
-                JSON.stringify(record.week1), 
-                JSON.stringify(record.week2), 
-                JSON.stringify(record.week3), 
-                JSON.stringify(record.week4), 
-                JSON.stringify(record.week5), 
+                JSON.stringify(week1), 
+                JSON.stringify(week2), 
+                JSON.stringify(week3), 
+                JSON.stringify(week4), 
+                JSON.stringify(week5), 
                 record.upr, 
                 record.sd, 
                 record.sdfa_coefficient, 
@@ -89,12 +112,12 @@ async function importDataFromJson() {
 router.get('/', async(req, res) => {
     try {
         const result = await pool.query('SELECT * FROM derbySdfa');
-        res.status(200).json(result.rows);
+        res.status(200).json(result.rows);  // The result will include weekNo
     } catch (err) {
         console.error('Error fetching derbySdfa:', err);
         res.status(500).json({ message: 'Failed to fetch derbySdfa' });
     }
-})
+});
 
 module.exports = {
     router,
