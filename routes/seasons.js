@@ -68,7 +68,6 @@ async function importDataFromJson() {
         const transformedData = data.data.map((record) => {
             const addWeekData = (weekData) => {
                 if (!Array.isArray(weekData)) {
-                    console.warn("Week data is not an array:", weekData);
                     weekData = [weekData];
                 }
 
@@ -85,26 +84,14 @@ async function importDataFromJson() {
                 });
             };
 
-            const week1 = addWeekData(record.sdfa_points[0].week1);
-            const week2 = addWeekData(record.sdfa_points[0].week2);
-            const week3 = addWeekData(record.sdfa_points[0].week3);
-            const week4 = addWeekData(record.sdfa_points[0].week4);
-            const week5 = addWeekData(record.sdfa_points[0].week5);
+            const weeks = {};
+            for (let i = 1; i <= 5; i++) {
+                weeks[`week${i}`] = addWeekData(record.sdfa_points[0][`week${i}`]);
+            }
 
-            const sdfa_points = [
-                {
-                    week1: week1,
-                    week2: week2,
-                    week3: week3,
-                    week4: week4,
-                    week5: week5
-                }
-            ];
-
-            const totalWeeks = [
-                ...week1, ...week2, ...week3, ...week4, ...week5
-            ].reduce((acc, week) => acc + parseFloat(week.week), 0);
-
+            const sdfa_points = [weeks];
+            const totalWeeks = Object.values(weeks).flat()
+                .reduce((acc, week) => acc + parseFloat(week.week), 0);
             const numberOfWeeks = Object.keys(sdfa_points[0]).length;
             const upr = (totalWeeks / numberOfWeeks).toFixed(2);
 
@@ -123,7 +110,7 @@ async function importDataFromJson() {
             data: transformedData
         };
 
-        console.log(JSON.stringify(finalData, null, 2));
+        // console.log(JSON.stringify(finalData, null, 2));
 
         // Now that avgPoints is available, proceed with inserting data into the database
         for (const record of transformedData) {
@@ -202,6 +189,8 @@ router.get('/', async (req, res) => {
 
             // Calculate sd using upr - avgPoints
             const sd = (parseFloat(record.upr) - parseFloat(avgPoints)).toFixed(2);
+            console.log('sd', sd, 'avgPoints', avgPoints)
+            const sdfaPointsFormula = (parseFloat(record.sd) / parseFloat(avgPoints)).toFixed(2);
 
             return {
                 id: record.id,
@@ -218,10 +207,10 @@ router.get('/', async (req, res) => {
                 remarks: record.remarks,
                 sdfa_points: {
                     upr: record.upr,
-                    sd: sd,  // Add sd field to the response
+                    sd: sd,
+                    sdfaPointsFormula: sdfaPointsFormula,
                     data: [weeksData]
-                },
-                weekno: record.weekno
+                }
             };
         });
 
