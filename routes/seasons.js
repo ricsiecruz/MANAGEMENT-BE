@@ -64,121 +64,38 @@ const calculateAvgFactorF = (data) => {
 async function importDataFromJson() {
     const data = JSON.parse(fs.readFileSync('C:/Program Files/PostgreSQL/17/data/derbySdfa.json', 'utf8'));
 
-    try {
-        const transformedData = data.data.map((record) => {
-            const addWeekData = (weekData) => {
-                if (!Array.isArray(weekData)) {
-                    weekData = [weekData];
-                }
+    // SQL query for inserting data into the database
+    const insertQuery = `
+    INSERT INTO derbySdfa (
+        id, line, family, sire, dam, upr, sd, remarks, sdfa_coefficient, sdfa_points
+    ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+    )
+    `;
 
-                return weekData.map(week => ({
-                    f: parseFloat(week.f || "0").toFixed(2),
-                    points: parseFloat(week.points || "0.00").toFixed(2),
-                    week: (parseFloat(week.f || "0") * parseFloat(week.points || "0.00")).toFixed(2),
-                    totalBirds: week?.totalBirds || ""
-                }));
-            };
+    // Insert data into the PostgreSQL database
+    data.data.forEach(async (item) => {
+        const values = [
+            item.id,
+            item.line,
+            item.family,
+            item.sire,
+            item.dam,
+            item.upr,
+            item.sd,
+            item.remarks,
+            JSON.stringify(item.sdfa_coefficient),
+            JSON.stringify(item.sdfa_points),
+        ];
 
-            const weeks = {};
-            for (let i = 1; i <= 5; i++) {
-                weeks[`week${i}`] = addWeekData(record.sdfa_points[0][`week${i}`]);
-            }
-
-            const sdfa_points = [weeks];
-            const totalWeeks = Object.values(weeks).flat()
-                .reduce((acc, week) => acc + parseFloat(week.week), 0);
-            const numberOfWeeks = Object.keys(sdfa_points[0]).length;
-            const upr = (totalWeeks / numberOfWeeks).toFixed(2);
-
-            return {
-                ...record,
-                upr: upr,
-                sdfa_points: sdfa_points
-            };
-        });
-
-        const avgPoints = calculateAvgPoints(transformedData);
-
-        for (const record of transformedData) {
-            const weeksData = record.sdfa_points[0];
-
-            const transformedWeeksData = Object.keys(weeksData).reduce((acc, weekKey) => {
-                const week = weeksData[weekKey];
-
-                const weekPoints = {
-                    points: parseFloat(week[0]?.points || "0").toFixed(2),
-                    f: parseFloat(week[0]?.f || "0").toFixed(2),
-                    week: parseFloat(week[0]?.week || "0").toFixed(2),
-                };
-
-                const weekCoefficient = {
-                    rank: weekKey === 'week1' ? 1 : null, // Replace with actual rank calculation
-                    totalBirds: week.length || 0,          // Replace with actual total birds calculation
-                    week: parseFloat(week[0]?.week || "0").toFixed(2),
-                };
-
-                acc.sdfaPoints[weekKey] = weekPoints;
-                acc.sdfaCoefficient[weekKey] = weekCoefficient;
-
-                return acc;
-            }, { sdfaPoints: {}, sdfaCoefficient: {} });
-
-            const sd = (parseFloat(record.upr) - parseFloat(avgPoints)).toFixed(2);
-            const sdfaPointsFormula = (parseFloat(sd) / parseFloat(avgPoints)).toFixed(2);
-
-            const query = `
-                INSERT INTO derbySdfa (
-                    id, line, family, sire, dam, week1, week2, week3, week4, week5, upr, sd, sdfa_coefficient, remarks, sdfa_points
-                ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
-                )
-                ON CONFLICT (id) DO UPDATE SET
-                    line = EXCLUDED.line,
-                    family = EXCLUDED.family,
-                    sire = EXCLUDED.sire,
-                    dam = EXCLUDED.dam,
-                    week1 = EXCLUDED.week1,
-                    week2 = EXCLUDED.week2,
-                    week3 = EXCLUDED.week3,
-                    week4 = EXCLUDED.week4,
-                    week5 = EXCLUDED.week5,
-                    upr = EXCLUDED.upr,
-                    sd = EXCLUDED.sd,
-                    sdfa_coefficient = EXCLUDED.sdfa_coefficient,
-                    remarks = EXCLUDED.remarks,
-                    sdfa_points = EXCLUDED.sdfa_points;
-            `;
-
-            const values = [
-                record.id,
-                record.line,
-                record.family,
-                record.sire,
-                record.dam,
-                JSON.stringify(record.sdfa_points[0].week1),
-                JSON.stringify(record.sdfa_points[0].week2),
-                JSON.stringify(record.sdfa_points[0].week3),
-                JSON.stringify(record.sdfa_points[0].week4),
-                JSON.stringify(record.sdfa_points[0].week5),
-                record.upr,
-                sd,
-                JSON.stringify({ data: [transformedWeeksData.sdfaCoefficient] }), // Transform coefficient
-                record.remarks,
-                JSON.stringify({
-                    upr: record.upr,
-                    sd: sd,
-                    sdfaPointsFormula: sdfaPointsFormula,
-                    data: [transformedWeeksData.sdfaPoints]
-                }) // Transform sdfa_points
-            ];
-
-            await pool.query(query, values);
+        try {
+            await pool.query(insertQuery, values);
+    
+            console.log('Data imported successfully');
+        } catch (err) {
+            console.error('Error importing data:', err);
         }
-
-        console.log('Data imported successfully');
-    } catch (err) {
-        console.error('Error importing data:', err);
-    }
+    })
 }
 
 
