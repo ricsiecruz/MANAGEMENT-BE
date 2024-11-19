@@ -66,32 +66,18 @@ async function importDataFromJson() {
 
     try {
         const transformedData = data.data.map((record) => {
-            console.log('import record', record)
             const addWeekData = (weekData) => {
-                console.log('weekdata', weekData)
-                // Ensure weekData is an array
                 if (!Array.isArray(weekData)) {
                     weekData = [weekData];
                 }
-            
-                // Map each week object and retain all necessary fields
-                return weekData.map(week => {
-                    console.log('week', week)
-                    // Parse points and f safely, defaulting to 0 if missing or invalid
-                    const f = parseFloat(week.f || "0");
-                    const points = parseFloat(week.points || "0.00");
-            
-                    // Construct the transformed object while preserving totalBirds
-                    return {
-                        f: f.toString(),
-                        points: points.toFixed(2),
-                        week: (f * points).toFixed(2),
-                        totalBirds: week?.totalBirds || "" // Preserve totalBirds as is
-                    };
-                });
-            };
 
-            console.log('add week data', addWeekData)
+                return weekData.map(week => ({
+                    f: parseFloat(week.f || "0").toFixed(2),
+                    points: parseFloat(week.points || "0.00").toFixed(2),
+                    week: (parseFloat(week.f || "0") * parseFloat(week.points || "0.00")).toFixed(2),
+                    totalBirds: week?.totalBirds || ""
+                }));
+            };
 
             const weeks = {};
             for (let i = 1; i <= 5; i++) {
@@ -113,13 +99,32 @@ async function importDataFromJson() {
 
         const avgPoints = calculateAvgPoints(transformedData);
 
-        const finalData = {
-            avgPoints: avgPoints,
-            data: transformedData
-        };
-
         for (const record of transformedData) {
-            const sd = (parseFloat(record.upr) - parseFloat(avgPoints)).toFixed(2);  // Calculate sd here
+            const weeksData = record.sdfa_points[0];
+
+            const transformedWeeksData = Object.keys(weeksData).reduce((acc, weekKey) => {
+                const week = weeksData[weekKey];
+
+                const weekPoints = {
+                    points: parseFloat(week[0]?.points || "0").toFixed(2),
+                    f: parseFloat(week[0]?.f || "0").toFixed(2),
+                    week: parseFloat(week[0]?.week || "0").toFixed(2),
+                };
+
+                const weekCoefficient = {
+                    rank: weekKey === 'week1' ? 1 : null, // Replace with actual rank calculation
+                    totalBirds: week.length || 0,          // Replace with actual total birds calculation
+                    week: parseFloat(week[0]?.week || "0").toFixed(2),
+                };
+
+                acc.sdfaPoints[weekKey] = weekPoints;
+                acc.sdfaCoefficient[weekKey] = weekCoefficient;
+
+                return acc;
+            }, { sdfaPoints: {}, sdfaCoefficient: {} });
+
+            const sd = (parseFloat(record.upr) - parseFloat(avgPoints)).toFixed(2);
+            const sdfaPointsFormula = (parseFloat(sd) / parseFloat(avgPoints)).toFixed(2);
 
             const query = `
                 INSERT INTO derbySdfa (
@@ -143,6 +148,7 @@ async function importDataFromJson() {
                     remarks = EXCLUDED.remarks,
                     sdfa_points = EXCLUDED.sdfa_points;
             `;
+
             const values = [
                 record.id,
                 record.line,
@@ -155,10 +161,15 @@ async function importDataFromJson() {
                 JSON.stringify(record.sdfa_points[0].week4),
                 JSON.stringify(record.sdfa_points[0].week5),
                 record.upr,
-                sd,  // Include sd here
-                record.sdfa_coefficient,
+                sd,
+                JSON.stringify({ data: [transformedWeeksData.sdfaCoefficient] }), // Transform coefficient
                 record.remarks,
-                JSON.stringify(record.sdfa_points)
+                JSON.stringify({
+                    upr: record.upr,
+                    sd: sd,
+                    sdfaPointsFormula: sdfaPointsFormula,
+                    data: [transformedWeeksData.sdfaPoints]
+                }) // Transform sdfa_points
             ];
 
             await pool.query(query, values);
@@ -169,6 +180,7 @@ async function importDataFromJson() {
         console.error('Error importing data:', err);
     }
 }
+
 
 router.get('/', async (req, res) => {
     try {
