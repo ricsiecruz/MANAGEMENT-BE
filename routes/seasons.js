@@ -66,23 +66,32 @@ async function importDataFromJson() {
 
     try {
         const transformedData = data.data.map((record) => {
+            console.log('import record', record)
             const addWeekData = (weekData) => {
+                console.log('weekdata', weekData)
+                // Ensure weekData is an array
                 if (!Array.isArray(weekData)) {
                     weekData = [weekData];
                 }
-
+            
+                // Map each week object and retain all necessary fields
                 return weekData.map(week => {
+                    console.log('week', week)
+                    // Parse points and f safely, defaulting to 0 if missing or invalid
                     const f = parseFloat(week.f || "0");
                     const points = parseFloat(week.points || "0.00");
-                    const weekValue = f * points;
-
+            
+                    // Construct the transformed object while preserving totalBirds
                     return {
                         f: f.toString(),
                         points: points.toFixed(2),
-                        week: weekValue.toFixed(2)
+                        week: (f * points).toFixed(2),
+                        totalBirds: week?.totalBirds || "" // Preserve totalBirds as is
                     };
                 });
             };
+
+            console.log('add week data', addWeekData)
 
             const weeks = {};
             for (let i = 1; i <= 5; i++) {
@@ -102,7 +111,6 @@ async function importDataFromJson() {
             };
         });
 
-        // Calculate avgPoints AFTER transforming data
         const avgPoints = calculateAvgPoints(transformedData);
 
         const finalData = {
@@ -110,9 +118,6 @@ async function importDataFromJson() {
             data: transformedData
         };
 
-        // console.log(JSON.stringify(finalData, null, 2));
-
-        // Now that avgPoints is available, proceed with inserting data into the database
         for (const record of transformedData) {
             const sd = (parseFloat(record.upr) - parseFloat(avgPoints)).toFixed(2);  // Calculate sd here
 
@@ -169,6 +174,14 @@ router.get('/', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM derbySdfa');
 
+        const data = result.rows.forEach((row, index) => {
+            console.log(`Row ${index + 1}:`);
+            console.log('week1:', JSON.stringify(row.week1, null, 2)); // Pretty print week1 array
+          });
+          
+
+        console.log('result', data)
+
         if (result.rows.length === 0) {
             return res.status(200).json({ avgPoints: 0, data: [] });
         }
@@ -177,19 +190,30 @@ router.get('/', async (req, res) => {
         const avgFactorF = calculateAvgFactorF(result.rows);
 
         const transformedData = result.rows.map(record => {
-            // Extract weeks from sdfa_points
+            console.log('get api record', record)
             const sdfaPoints = record.sdfa_points[0];
-            const weeksData = {
-                week1: sdfaPoints.week1,
-                week2: sdfaPoints.week2,
-                week3: sdfaPoints.week3,
-                week4: sdfaPoints.week4,
-                week5: sdfaPoints.week5
-            };
+            const weeksData = Object.keys(sdfaPoints).reduce((acc, weekKey) => {
+                const week = sdfaPoints[weekKey];
 
-            // Calculate sd using upr - avgPoints
+                const weekPoints = {
+                    points: parseFloat(week[0]?.points || "0").toFixed(2),
+                    f: parseFloat(week[0]?.f || "0").toFixed(2),
+                    week: parseFloat(week[0]?.week || "0").toFixed(2),
+                };
+
+                const weekCoefficient = {
+                    rank: weekKey === 'week1' ? 1 : null, // Replace with actual rank calculation
+                    totalBirds: week.length || 0,          // Replace with actual total birds calculation
+                    week: parseFloat(week[0]?.week || "0").toFixed(2),
+                };
+
+                acc.sdfaPoints[weekKey] = weekPoints;
+                acc.sdfaCoefficient[weekKey] = weekCoefficient;
+
+                return acc;
+            }, { sdfaPoints: {}, sdfaCoefficient: {} });
+
             const sd = (parseFloat(record.upr) - parseFloat(avgPoints)).toFixed(2);
-            console.log('sd', sd, 'avgPoints', avgPoints)
             const sdfaPointsFormula = (parseFloat(record.sd) / parseFloat(avgPoints)).toFixed(2);
 
             return {
@@ -198,18 +222,15 @@ router.get('/', async (req, res) => {
                 family: record.family,
                 sire: record.sire,
                 dam: record.dam,
-                week1: record.week1,
-                week2: record.week2,
-                week3: record.week3,
-                week4: record.week4,
-                week5: record.week5,
-                sdfa_coefficient: record.sdfa_coefficient,
+                sdfa_coefficient: {
+                    data:[weeksData.sdfaCoefficient]
+                },
                 remarks: record.remarks,
                 sdfa_points: {
                     upr: record.upr,
                     sd: sd,
                     sdfaPointsFormula: sdfaPointsFormula,
-                    data: [weeksData]
+                    data: [weeksData.sdfaPoints]
                 }
             };
         });
@@ -217,7 +238,7 @@ router.get('/', async (req, res) => {
         const responseData = {
             avgPoints: avgPoints,
             avgFactorF: avgFactorF,
-            data: transformedData
+            data: transformedData,
         };
 
         res.status(200).json(responseData);
@@ -226,6 +247,7 @@ router.get('/', async (req, res) => {
         res.status(500).json({ message: 'Failed to fetch derbySdfa' });
     }
 });
+
 
 module.exports = {
     router,
