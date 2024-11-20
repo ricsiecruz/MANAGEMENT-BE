@@ -124,26 +124,72 @@ async function importDataFromJson() {
     }
 }
 
-
 router.get('/', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM derbySdfa');
+        // Fetch data from the database
+        const result = await pool.query('SELECT * FROM derbySdfa'); 
 
-        // Map through the rows and parse `sdfa_coefficient` from string to JSON
-        const formattedResult = result.rows.map((row) => {
-            return {
-                ...row,
-                sdfa_coefficient: JSON.parse(row.sdfa_coefficient), // Convert JSON string to object
-            };
-        });
+        // Prepare the response structure
+        const response = {
+            AveUPR: null, // Set AveUPR as needed
+            data: result.rows.map((row) => {
+                let sdfaCoefficient = [];
+                
+                // Validate sdfa_coefficient format
+                if (typeof row.sdfa_coefficient === 'string') {
+                    try {
+                        sdfaCoefficient = JSON.parse(row.sdfa_coefficient);
+                        if (!Array.isArray(sdfaCoefficient)) {
+                            throw new Error('Invalid sdfa_coefficient data (not an array)');
+                        }
+                    } catch (error) {
+                        console.error('Error parsing sdfa_coefficient:', error);
+                    }
+                } else if (Array.isArray(row.sdfa_coefficient)) {
+                    sdfaCoefficient = row.sdfa_coefficient; // Use directly if it's already an array
+                } else {
+                    console.warn('Invalid sdfa_coefficient data:', row.sdfa_coefficient);
+                }
 
-        res.status(200).json(formattedResult);
+                // Function to safely parse JSON or return the original object
+                const safeParseJson = (data) => {
+                    try {
+                        return typeof data === 'string' ? JSON.parse(data) : data;
+                    } catch (error) {
+                        console.error('Error parsing data:', error);
+                        return [];
+                    }
+                };
+
+                return {
+                    id: row.id,
+                    line: row.line,
+                    family: row.family,
+                    sire: row.sire,
+                    dam: row.dam,
+                    week1: safeParseJson(row.week1),
+                    week2: safeParseJson(row.week2),
+                    week3: safeParseJson(row.week3),
+                    week4: safeParseJson(row.week4),
+                    week5: safeParseJson(row.week5),
+                    upr: row.upr || "0.00",
+                    sd: row.sd || "",
+                    sdfa_coefficient: sdfaCoefficient,
+                    remarks: row.remarks || "",
+                    sdfa_points: safeParseJson(row.sdfa_points),
+                    weekno: row.weekno || null,
+                };
+            })
+        };
+
+        // Send the structured response
+        res.status(200).json([response]);
+
     } catch (err) {
         console.error('Error fetching derbySdfa:', err);
         res.status(500).json({ message: 'Failed to fetch derbySdfa' });
     }
 });
-
 
 module.exports = {
     router,
