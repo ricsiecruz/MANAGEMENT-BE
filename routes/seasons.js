@@ -127,11 +127,14 @@ async function importDataFromJson() {
 router.get('/', async (req, res) => {
     try {
         // Fetch data from the database
-        const result = await pool.query('SELECT * FROM derbySdfa'); 
+        const result = await pool.query('SELECT * FROM derbySdfa');
 
-        // Prepare the response structure
+        // Calculate the average of all sdfa_coefficient.upr values
+        let totalUpr = 0;
+        let validUprCount = 0;
+
         const response = {
-            AveUPR: null, // Set AveUPR as needed
+            aveUPR: null,  // Initialize AveUPR
             data: result.rows.map((row) => {
                 let sdfaCoefficient = [];
                 
@@ -149,6 +152,15 @@ router.get('/', async (req, res) => {
                     sdfaCoefficient = row.sdfa_coefficient; // Use directly if it's already an array
                 } else {
                     console.warn('Invalid sdfa_coefficient data:', row.sdfa_coefficient);
+                }
+
+                // Extract and accumulate valid upr values
+                if (sdfaCoefficient && sdfaCoefficient.upr) {
+                    const upr = parseFloat(sdfaCoefficient.upr);
+                    if (!isNaN(upr)) {
+                        totalUpr += upr;
+                        validUprCount++;
+                    }
                 }
 
                 // Function to safely parse JSON or return the original object
@@ -181,6 +193,13 @@ router.get('/', async (req, res) => {
                 };
             })
         };
+
+        // Calculate AveUPR by averaging the valid upr values
+        if (validUprCount > 0) {
+            response.aveUPR = (totalUpr / validUprCount).toFixed(2); // Round to 2 decimal places
+        } else {
+            response.aveUPR = "0.00";  // Default value if no valid upr values
+        }
 
         // Send the structured response
         res.status(200).json([response]);
