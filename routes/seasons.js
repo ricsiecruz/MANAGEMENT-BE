@@ -56,6 +56,20 @@ async function importDataFromJson() {
     `;
 
     for (const item of data.data) {
+        // Modify `sdfa_coefficient` to include the calculated "week" value
+        const updatedSdfaCoefficient = item.sdfa_coefficient.map((weekData) => {
+            return Object.entries(weekData).reduce((result, [week, values]) => {
+                const rank = parseFloat(values.rank || 0);
+                const totalBirds = parseFloat(values.totalBirds || 0);
+
+                // Calculate "week" using the formula rank / totalBirds
+                const weekValue = totalBirds !== 0 ? (rank / totalBirds).toFixed(2) : '0.00';
+
+                result[week] = { ...values, week: weekValue }; // Add calculated "week" to the object
+                return result;
+            }, {});
+        });
+
         // Parse and modify `sdfa_points` to include `upr`
         const updatedSdfaPoints = item.sdfa_points.map((weekData) => {
             return Object.entries(weekData).reduce((result, [week, values]) => {
@@ -76,7 +90,7 @@ async function importDataFromJson() {
             item.dam,
             item.sd,
             item.remarks,
-            JSON.stringify(item.sdfa_coefficient),
+            JSON.stringify(updatedSdfaCoefficient), // Add updated JSON with calculated "week"
             JSON.stringify(updatedSdfaPoints), // Add updated JSON with `upr`
         ];
 
@@ -88,6 +102,7 @@ async function importDataFromJson() {
         }
     }
 }
+
 
 router.get('/', async (req, res) => {
     try {
