@@ -130,6 +130,8 @@ router.get('/', async (req, res) => {
 
         let totalUpr = 0;
         let validUprCount = 0;
+        let totalBirdsSum = 0;
+        let totalBirdsCount = 0;
 
         const data = result.rows.map((row) => {
             let sdfaCoefficient = [];
@@ -155,6 +157,17 @@ router.get('/', async (req, res) => {
                     totalUpr += upr;
                     validUprCount++;
                 }
+
+                // Calculate Total Birds Sum and Count
+                sdfaCoefficient[0]?.data.forEach((weekData) => {
+                    Object.values(weekData).forEach((week) => {
+                        const totalBirds = parseFloat(week.totalBirds || "0");
+                        if (!isNaN(totalBirds) && totalBirds > 0) {
+                            totalBirdsSum += totalBirds;
+                            totalBirdsCount++;
+                        }
+                    });
+                });
             }
 
             return {
@@ -170,30 +183,30 @@ router.get('/', async (req, res) => {
         });
 
         const aveUPR = validUprCount > 0 ? (totalUpr / validUprCount).toFixed(2) : "0.00";
+        const avePopulation = totalBirdsCount > 0 ? (totalBirdsSum / totalBirdsCount).toFixed(2) : "0.00";
 
-        // Add aveUPR to each sdfa_coefficient
-data.forEach((item) => {
-    item.sdfa_coefficient = Array.isArray(item.sdfa_coefficient)
-        ? item.sdfa_coefficient.map((entry) => {
-              const upr = parseFloat(entry.upr || "0.00");
-              const sd = (parseFloat(aveUPR) - upr).toFixed(2); // Calculate sd
-              return {
-                  ...entry,
-                  aveUPR,
-                  sd, // Add calculated sd here
-              };
-          })
-        : [];
-});
+        data.forEach((item) => {
+            item.sdfa_coefficient = Array.isArray(item.sdfa_coefficient)
+                ? item.sdfa_coefficient.map((entry) => {
+                      const upr = parseFloat(entry.upr || "0.00");
+                      const sd = (parseFloat(aveUPR) - upr).toFixed(2); // Calculate sd
+                      return {
+                          ...entry,
+                          aveUPR, // Add aveUPR here
+                          sd,     // Add calculated sd
+                          avePopulation // Add avePopulation here
+                      };
+                  })
+                : [];
+        });
+        
 
-
-        res.status(200).json([{ aveUPR, data }]);
+        res.status(200).json([{ aveUPR, avePopulation, data }]);
     } catch (err) {
         console.error('Error fetching derbySdfa:', err);
         res.status(500).json({ message: 'Failed to fetch derbySdfa' });
     }
 });
-
 
 // Helper function for safely parsing JSON
 function safeParseJson(data) {
