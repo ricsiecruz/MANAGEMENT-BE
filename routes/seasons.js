@@ -56,9 +56,10 @@ async function importDataFromJson() {
     `;
 
     for (const item of data.data) {
-        // Modify `sdfa_coefficient` to include the calculated "week" value
+        // Calculate updated `sdfa_coefficient` with "week" and `upr`
         const updatedSdfaCoefficient = item.sdfa_coefficient.map((weekData) => {
-            return Object.entries(weekData).reduce((result, [week, values]) => {
+            // Calculate "week" values
+            const weekValues = Object.entries(weekData).reduce((result, [week, values]) => {
                 const rank = parseFloat(values.rank || 0);
                 const totalBirds = parseFloat(values.totalBirds || 0);
 
@@ -68,7 +69,27 @@ async function importDataFromJson() {
                 result[week] = { ...values, week: weekValue }; // Add calculated "week" to the object
                 return result;
             }, {});
+
+            // Calculate `upr` as the average of all "week" values
+            const weekAverages = Object.values(weekValues)
+                .map((value) => parseFloat(value.week || 0))
+                .filter((num) => !isNaN(num)); // Exclude non-numeric values
+
+            const upr = weekAverages.length > 0
+                ? (weekAverages.reduce((sum, value) => sum + value, 0) / weekAverages.length).toFixed(2)
+                : '0.00';
+
+            // Return the modified structure
+            return {
+                upr, // Add `upr` at the root level
+                data: [weekValues] // Add weeks data as `data`
+            };
         });
+
+        // Convert the array of `sdfa_coefficient` to the desired structure
+        const formattedSdfaCoefficient = updatedSdfaCoefficient.length > 0
+            ? { upr: updatedSdfaCoefficient[0].upr, data: updatedSdfaCoefficient[0].data }
+            : null;
 
         // Parse and modify `sdfa_points` to include `upr`
         const updatedSdfaPoints = item.sdfa_points.map((weekData) => {
@@ -90,7 +111,7 @@ async function importDataFromJson() {
             item.dam,
             item.sd,
             item.remarks,
-            JSON.stringify(updatedSdfaCoefficient), // Add updated JSON with calculated "week"
+            JSON.stringify(formattedSdfaCoefficient), // Add updated JSON with calculated `upr` and "week"
             JSON.stringify(updatedSdfaPoints), // Add updated JSON with `upr`
         ];
 
