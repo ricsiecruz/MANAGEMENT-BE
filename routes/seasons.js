@@ -190,11 +190,13 @@ router.get('/', async (req, res) => {
                 ? item.sdfa_coefficient.map((entry) => {
                       const upr = parseFloat(entry.upr || "0.00");
                       const sd = (parseFloat(aveUPR) - upr).toFixed(2); // Calculate sd
+                      const sdfaCoefficient = (sd / avePopulation).toFixed(2);
                       return {
                           ...entry,
                           aveUPR, // Add aveUPR here
                           sd,     // Add calculated sd
-                          avePopulation // Add avePopulation here
+                          avePopulation,
+                          sdfaCoefficient
                       };
                   })
                 : [];
