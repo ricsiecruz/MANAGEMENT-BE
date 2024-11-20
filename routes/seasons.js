@@ -12,13 +12,6 @@ async function createDerbySdfaTable() {
             family VARCHAR,
             sire VARCHAR,
             dam VARCHAR,
-            week1 JSONB,
-            week2 JSONB,
-            week3 JSONB,
-            week4 JSONB,
-            week5 JSONB,
-            upr VARCHAR,
-            sd VARCHAR,
             sdfa_coefficient VARCHAR,
             remarks VARCHAR,
             sdfa_points JSONB
@@ -62,29 +55,35 @@ async function importDataFromJson() {
             const weekValues = Object.entries(weekData).reduce((result, [week, values]) => {
                 const rank = parseFloat(values.rank || 0);
                 const totalBirds = parseFloat(values.totalBirds || 0);
-
+        
                 // Calculate "week" using the formula rank / totalBirds
                 const weekValue = totalBirds !== 0 ? (rank / totalBirds).toFixed(2) : '0.00';
-
+        
                 result[week] = { ...values, week: weekValue }; // Add calculated "week" to the object
                 return result;
             }, {});
-
+        
             // Calculate `upr` as the average of all "week" values
             const weekAverages = Object.values(weekValues)
                 .map((value) => parseFloat(value.week || 0))
                 .filter((num) => !isNaN(num)); // Exclude non-numeric values
-
+        
             const upr = weekAverages.length > 0
                 ? (weekAverages.reduce((sum, value) => sum + value, 0) / weekAverages.length).toFixed(2)
                 : '0.00';
-
-            // Return the modified structure
+        
+            // Calculate sd = aveUPR - upr
+            const aveUPR = parseFloat('0.10');  // Set this dynamically from your actual response
+            const sd = (aveUPR - parseFloat(upr)).toFixed(2); // Calculate SD as the difference
+        
+            // Return the modified structure with calculated sd
             return {
-                upr, // Add `upr` at the root level
+                upr,  // Add `upr` at the root level
+                sd,   // Add calculated `sd`
                 data: [weekValues] // Add weeks data as `data`
             };
         });
+        
 
         // Convert the array of `sdfa_coefficient` to the desired structure
         const formattedSdfaCoefficient = updatedSdfaCoefficient.length > 0
@@ -137,30 +136,40 @@ router.get('/', async (req, res) => {
             aveUPR: null,  // Initialize AveUPR
             data: result.rows.map((row) => {
                 let sdfaCoefficient = [];
-                
-                // Validate sdfa_coefficient format
+
+                // Validate sdfa_coefficient format and safely parse it
                 if (typeof row.sdfa_coefficient === 'string') {
                     try {
                         sdfaCoefficient = JSON.parse(row.sdfa_coefficient);
-                        if (!Array.isArray(sdfaCoefficient)) {
-                            throw new Error('Invalid sdfa_coefficient data (not an array)');
+                        if (Array.isArray(sdfaCoefficient)) {
+                            // It's an array, proceed as normal
+                        } else if (typeof sdfaCoefficient === 'object' && sdfaCoefficient.upr) {
+                            // It's an object, handle this case
+                            sdfaCoefficient = [sdfaCoefficient];  // Wrap it in an array for consistency
+                        } else {
+                            throw new Error('Invalid sdfa_coefficient data (not an array or object with upr)');
                         }
                     } catch (error) {
                         console.error('Error parsing sdfa_coefficient:', error);
                     }
                 } else if (Array.isArray(row.sdfa_coefficient)) {
                     sdfaCoefficient = row.sdfa_coefficient; // Use directly if it's already an array
+                } else if (typeof row.sdfa_coefficient === 'object' && row.sdfa_coefficient.upr) {
+                    // It's an object with upr, handle this case
+                    sdfaCoefficient = [row.sdfa_coefficient];  // Wrap it in an array for consistency
                 } else {
                     console.warn('Invalid sdfa_coefficient data:', row.sdfa_coefficient);
                 }
 
-                // Extract and accumulate valid upr values
-                if (sdfaCoefficient && sdfaCoefficient.upr) {
-                    const upr = parseFloat(sdfaCoefficient.upr);
+                // Ensure sdfaCoefficient is an array and has valid data
+                if (Array.isArray(sdfaCoefficient) && sdfaCoefficient.length > 0) {
+                    const upr = parseFloat(sdfaCoefficient[0].upr || "0.00");
                     if (!isNaN(upr)) {
                         totalUpr += upr;
                         validUprCount++;
                     }
+                } else {
+                    console.warn('Invalid sdfa_coefficient data:', sdfaCoefficient);
                 }
 
                 // Function to safely parse JSON or return the original object
@@ -173,23 +182,23 @@ router.get('/', async (req, res) => {
                     }
                 };
 
+                // Calculate sd as aveUPR - sdfa_coefficient.upr
+                const aveUPR = validUprCount > 0 ? (totalUpr / validUprCount).toFixed(2) : "0.00";  // Calculate aveUPR
+                const sdfaCoefficientUpr = sdfaCoefficient.length > 0 ? parseFloat(sdfaCoefficient[0].upr || "0.00") : 0;
+                const sd = (parseFloat(aveUPR) - sdfaCoefficientUpr).toFixed(2);  // Calculate sd
+
+                // Update sdfa_coefficient with calculated sd
+                sdfaCoefficient.sd = sd;
+
                 return {
                     id: row.id,
                     line: row.line,
                     family: row.family,
                     sire: row.sire,
                     dam: row.dam,
-                    week1: safeParseJson(row.week1),
-                    week2: safeParseJson(row.week2),
-                    week3: safeParseJson(row.week3),
-                    week4: safeParseJson(row.week4),
-                    week5: safeParseJson(row.week5),
-                    upr: row.upr || "0.00",
-                    sd: row.sd || "",
                     sdfa_coefficient: sdfaCoefficient,
                     remarks: row.remarks || "",
                     sdfa_points: safeParseJson(row.sdfa_points),
-                    weekno: row.weekno || null,
                 };
             })
         };
@@ -209,6 +218,7 @@ router.get('/', async (req, res) => {
         res.status(500).json({ message: 'Failed to fetch derbySdfa' });
     }
 });
+
 
 module.exports = {
     router,
