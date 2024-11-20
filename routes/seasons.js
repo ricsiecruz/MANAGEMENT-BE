@@ -128,96 +128,82 @@ router.get('/', async (req, res) => {
         // Fetch data from the database
         const result = await pool.query('SELECT * FROM derbySdfa');
 
-        // Calculate the average of all sdfa_coefficient.upr values
         let totalUpr = 0;
         let validUprCount = 0;
 
-        const response = {
-            aveUPR: null,  // Initialize AveUPR
-            data: result.rows.map((row) => {
-                let sdfaCoefficient = [];
+        const data = result.rows.map((row) => {
+            let sdfaCoefficient = [];
 
-                // Validate sdfa_coefficient format and safely parse it
-                if (typeof row.sdfa_coefficient === 'string') {
-                    try {
-                        sdfaCoefficient = JSON.parse(row.sdfa_coefficient);
-                        if (Array.isArray(sdfaCoefficient)) {
-                            // It's an array, proceed as normal
-                        } else if (typeof sdfaCoefficient === 'object' && sdfaCoefficient.upr) {
-                            // It's an object, handle this case
-                            sdfaCoefficient = [sdfaCoefficient];  // Wrap it in an array for consistency
-                        } else {
-                            throw new Error('Invalid sdfa_coefficient data (not an array or object with upr)');
-                        }
-                    } catch (error) {
-                        console.error('Error parsing sdfa_coefficient:', error);
-                    }
-                } else if (Array.isArray(row.sdfa_coefficient)) {
-                    sdfaCoefficient = row.sdfa_coefficient; // Use directly if it's already an array
-                } else if (typeof row.sdfa_coefficient === 'object' && row.sdfa_coefficient.upr) {
-                    // It's an object with upr, handle this case
-                    sdfaCoefficient = [row.sdfa_coefficient];  // Wrap it in an array for consistency
-                } else {
-                    console.warn('Invalid sdfa_coefficient data:', row.sdfa_coefficient);
+            // Safely parse and handle sdfa_coefficient
+            if (typeof row.sdfa_coefficient === 'string') {
+                try {
+                    sdfaCoefficient = JSON.parse(row.sdfa_coefficient);
+                    sdfaCoefficient = Array.isArray(sdfaCoefficient) ? sdfaCoefficient : [sdfaCoefficient];
+                } catch (error) {
+                    console.error('Error parsing sdfa_coefficient:', error);
+                    sdfaCoefficient = [];
                 }
+            } else if (Array.isArray(row.sdfa_coefficient)) {
+                sdfaCoefficient = row.sdfa_coefficient;
+            } else if (row.sdfa_coefficient?.upr) {
+                sdfaCoefficient = [row.sdfa_coefficient];
+            }
 
-                // Ensure sdfaCoefficient is an array and has valid data
-                if (Array.isArray(sdfaCoefficient) && sdfaCoefficient.length > 0) {
-                    const upr = parseFloat(sdfaCoefficient[0].upr || "0.00");
-                    if (!isNaN(upr)) {
-                        totalUpr += upr;
-                        validUprCount++;
-                    }
-                } else {
-                    console.warn('Invalid sdfa_coefficient data:', sdfaCoefficient);
+            if (Array.isArray(sdfaCoefficient) && sdfaCoefficient.length > 0) {
+                const upr = parseFloat(sdfaCoefficient[0]?.upr || "0.00");
+                if (!isNaN(upr)) {
+                    totalUpr += upr;
+                    validUprCount++;
                 }
+            }
 
-                // Function to safely parse JSON or return the original object
-                const safeParseJson = (data) => {
-                    try {
-                        return typeof data === 'string' ? JSON.parse(data) : data;
-                    } catch (error) {
-                        console.error('Error parsing data:', error);
-                        return [];
-                    }
-                };
+            return {
+                id: row.id,
+                line: row.line,
+                family: row.family,
+                sire: row.sire,
+                dam: row.dam,
+                sdfa_coefficient: sdfaCoefficient,
+                remarks: row.remarks || "",
+                sdfa_points: safeParseJson(row.sdfa_points),
+            };
+        });
 
-                // Calculate sd as aveUPR - sdfa_coefficient.upr
-                const aveUPR = validUprCount > 0 ? (totalUpr / validUprCount).toFixed(2) : "0.00";  // Calculate aveUPR
-                const sdfaCoefficientUpr = sdfaCoefficient.length > 0 ? parseFloat(sdfaCoefficient[0].upr || "0.00") : 0;
-                const sd = (parseFloat(aveUPR) - sdfaCoefficientUpr).toFixed(2);  // Calculate sd
+        const aveUPR = validUprCount > 0 ? (totalUpr / validUprCount).toFixed(2) : "0.00";
 
-                // Update sdfa_coefficient with calculated sd
-                sdfaCoefficient.sd = sd;
+        // Add aveUPR to each sdfa_coefficient
+data.forEach((item) => {
+    item.sdfa_coefficient = Array.isArray(item.sdfa_coefficient)
+        ? item.sdfa_coefficient.map((entry) => {
+              const upr = parseFloat(entry.upr || "0.00");
+              const sd = (parseFloat(aveUPR) - upr).toFixed(2); // Calculate sd
+              return {
+                  ...entry,
+                  aveUPR,
+                  sd, // Add calculated sd here
+              };
+          })
+        : [];
+});
 
-                return {
-                    id: row.id,
-                    line: row.line,
-                    family: row.family,
-                    sire: row.sire,
-                    dam: row.dam,
-                    sdfa_coefficient: sdfaCoefficient,
-                    remarks: row.remarks || "",
-                    sdfa_points: safeParseJson(row.sdfa_points),
-                };
-            })
-        };
 
-        // Calculate AveUPR by averaging the valid upr values
-        if (validUprCount > 0) {
-            response.aveUPR = (totalUpr / validUprCount).toFixed(2); // Round to 2 decimal places
-        } else {
-            response.aveUPR = "0.00";  // Default value if no valid upr values
-        }
-
-        // Send the structured response
-        res.status(200).json([response]);
-
+        res.status(200).json([{ aveUPR, data }]);
     } catch (err) {
         console.error('Error fetching derbySdfa:', err);
         res.status(500).json({ message: 'Failed to fetch derbySdfa' });
     }
 });
+
+
+// Helper function for safely parsing JSON
+function safeParseJson(data) {
+    try {
+        return typeof data === 'string' ? JSON.parse(data) : data;
+    } catch (error) {
+        console.error('Error parsing data:', error);
+        return [];
+    }
+}
 
 
 module.exports = {
